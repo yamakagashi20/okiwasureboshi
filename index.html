@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>傘忘れ防止リマインダー</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png"> <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+</head>
+<body>
+    <div class="container">
+        <h1>傘忘れ防止リマインダー</h1>
+        <p>毎日、傘を持っていくか確認する時間を設定しましょう。</p>
+
+        <label for="notificationTime">通知する時間:</label>
+        <input type="time" id="notificationTime" value="08:00">
+
+        <button id="setReminder">リマインダーを設定</button>
+        <button id="clearReminder">リマインダーを解除</button>
+
+        <p id="statusMessage"></p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
