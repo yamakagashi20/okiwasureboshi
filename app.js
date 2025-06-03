@@ -23,6 +23,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedTime = localStorage.getItem('notificationTime');
     if (savedTime) {
         notificationTimeInput.value = savedTime;
+    
+    // ★以下の部分を追加または、既に存在することを確認
+        // Service Workerにメッセージを送信して、通知のスケジュールを設定
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                action: 'setReminder',
+                time: savedTime // 保存された時間をSWに送る
+            });
+            statusMessage.textContent = `リマインダーが設定されています: 毎日 ${savedTime} に通知。`;
+        }
+
     }
 
     // 通知許可を要求
