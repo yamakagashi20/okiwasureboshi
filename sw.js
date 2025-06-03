@@ -55,11 +55,11 @@ self.addEventListener('message', event => {
     if (event.data && event.data.action === 'setReminder') {
         const time = event.data.time; // 例: "08:00"
         console.log('Service Worker: Reminder set for:', time);
-        localStorage.setItem('notificationTime', time); // Service Worker自身のストレージにも保存
+      //  localStorage.setItem('notificationTime', time); // Service Worker自身のストレージにも保存 コメントアウトした。
         scheduleNextNotification(time);
     } else if (event.data && event.data.action === 'clearReminder') {
         console.log('Service Worker: Reminder cleared.');
-        localStorage.removeItem('notificationTime');
+      //  localStorage.removeItem('notificationTime');　　コメントアウトした。
         clearScheduledNotifications();
     }
 });
@@ -112,7 +112,7 @@ function clearScheduledNotifications() {
 // Service Workerが起動した際に、以前設定したリマインダーを復元
 self.addEventListener('activate', event => {
     event.waitUntil(self.clients.claim());
-    const savedTime = localStorage.getItem('notificationTime');
+   // const savedTime = localStorage.getItem('notificationTime');　コメントアウトした
     if (savedTime) {
         console.log('Service Worker: Restoring reminder for', savedTime);
         scheduleNextNotification(savedTime);
