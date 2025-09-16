@@ -1,0 +1,10 @@
+from bleak import BleakScanner
+
+async def scan():
+    devices = await BleakScanner.discover()
+    for d in devices:
+        if "Govee_H5110" in d.name:
+            print(d.address, d.metadata)
+
+import asyncio
+asyncio.run(scan())
