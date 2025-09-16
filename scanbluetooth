@@ -102,3 +102,50 @@ async def main():
 
 asyncio.run(main())
 
+
+
+import asyncio
+from bleak import BleakScanner
+import time
+
+TARGET_MAC = "AA:BB:CC:DD:EE:FF"  # ← あなたのH5110のMACに置き換え
+INTERVAL = 30   # 取得間隔（秒）
+
+def parse_govee_data(data: bytes):
+    """
+    Govee H5100/H5110 系のManufacturer Dataをパース
+    データ構造は機種ごとに異なるので調整が必要
+    """
+    if len(data) >= 6:
+        temp_raw = int.from_bytes(data[0:2], byteorder="little", signed=True)
+        hum_raw  = int.from_bytes(data[2:4], byteorder="little", signed=False)
+        batt_raw = data[4]
+        temp = temp_raw / 100
+        hum = hum_raw / 100
+        batt = batt_raw
+        return temp, hum, batt
+    return None
+
+async def get_temp_once():
+    devices = await BleakScanner.discover(timeout=5.0)
+    for d, adv in devices:   # ← (device, advertisement_data) のタプルで返る
+        if d.address == TARGET_MAC:
+            if adv.manufacturer_data:
+                for _, md in adv.manufacturer_data.items():
+                    parsed = parse_govee_data(md)
+                    if parsed:
+                        return parsed
+    return None
+
+async def main():
+    while True:
+        data = await get_temp_once()
+        if data:
+            temp, hum, batt = data
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{now}] Temp: {temp:.2f} °C, Humidity: {hum:.2f} %, Battery: {batt}%")
+        else:
+            print("No data found.")
+        await asyncio.sleep(INTERVAL)
+
+asyncio.run(main())
