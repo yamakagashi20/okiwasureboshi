@@ -8,3 +8,35 @@ async def scan():
 
 import asyncio
 asyncio.run(scan())
+
+
+
+import asyncio
+from bleak import BleakScanner
+
+def parse_govee_data(data: bytes):
+    # H5100/H5110 系列は Manufacturer Data に温湿度が入っている
+    # データ構造は機種ごとに異なるため要調整
+    if len(data) >= 6:
+        temp_raw = int.from_bytes(data[0:2], byteorder="little", signed=True)
+        hum_raw  = int.from_bytes(data[2:4], byteorder="little", signed=False)
+        batt_raw = data[4]
+        temp = temp_raw / 100
+        hum = hum_raw / 100
+        batt = batt_raw
+        return temp, hum, batt
+    return None
+
+async def scan():
+    devices = await BleakScanner.discover(timeout=10.0)
+    for d in devices:
+        if d.name and "Govee" in d.name:
+            print(f"Found {d.name} - {d.address}")
+            if d.metadata.get("manufacturer_data"):
+                for _, md in d.metadata["manufacturer_data"].items():
+                    parsed = parse_govee_data(md)
+                    if parsed:
+                        temp, hum, batt = parsed
+                        print(f"Temp: {temp} °C, Humidity: {hum} %, Battery: {batt} %")
+
+asyncio.run(scan())
