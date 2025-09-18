@@ -1,0 +1,35 @@
+sudo apt update
+sudo apt install bluetooth bluez python3-pip
+pip3 install bleak
+
+
+import asyncio
+from bleak import BleakScanner
+
+async def run():
+    devices = await BleakScanner.discover(timeout=5.0)
+    for d in devices:
+        print(d)
+
+asyncio.run(run())
+
+
+
+python3 scan_ble.py
+
+
+# listen_ble.py
+import asyncio
+from bleak import BleakScanner
+
+def callback(device, advertisement_data):
+    if "H5110" in device.name:
+        print(f"Device: {device.address}, RSSI: {device.rssi}, Data: {advertisement_data.manufacturer_data}")
+
+async def run():
+    scanner = BleakScanner(callback)
+    await scanner.start()
+    await asyncio.sleep(10.0)  # 10秒間受信
+    await scanner.stop()
+
+asyncio.run(run())
