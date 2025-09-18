@@ -75,3 +75,37 @@ async def main():
                         print(f"{d.address} 温度: {temp} ℃, 湿度: {hum} %")
 
 asyncio.run(main())
+
+
+bleak1.1.1に対応させる
+
+import asyncio
+from bleak import BleakScanner
+
+# H5110の広告データをデコード
+def decode_govee(data: bytes):
+    if len(data) >= 7:
+        temp_raw = int.from_bytes(data[3:5], byteorder="little", signed=True)
+        hum_raw = int.from_bytes(data[5:7], byteorder="little", signed=False)
+        temperature = temp_raw / 100
+        humidity = hum_raw / 100
+        return temperature, humidity
+    return None, None
+
+# スキャン中に呼ばれるコールバック
+def detection_callback(device, advertisement_data):
+    for m_id, m_data in advertisement_data.manufacturer_data.items():
+        if m_id == 0xEC88:  # Govee H51xxのメーカーID
+            temp, hum = decode_govee(m_data)
+            if temp is not None:
+                print(f"{device.address} 温度: {temp} ℃, 湿度: {hum} %")
+
+async def main():
+    scanner = BleakScanner(detection_callback)
+    await scanner.start()
+    print("スキャン中… 10秒間待機")
+    await asyncio.sleep(10.0)
+    await scanner.stop()
+    print("スキャン終了")
+
+asyncio.run(main())
