@@ -46,3 +46,32 @@ async def main():
         print(d)
 
 asyncio.run(main())
+
+
+
+
+from bleak import BleakScanner
+import asyncio
+
+def decode_govee(data: bytes):
+    # Govee H51xx フォーマット（例）
+    if len(data) >= 7:
+        temp_raw = int.from_bytes(data[3:5], byteorder="little", signed=True)
+        hum_raw = int.from_bytes(data[5:7], byteorder="little", signed=False)
+
+        temperature = temp_raw / 100
+        humidity = hum_raw / 100
+        return temperature, humidity
+    return None, None
+
+async def main():
+    devices = await BleakScanner.discover(timeout=10.0)
+    for d in devices:
+        if d.metadata and "manufacturer_data" in d.metadata:
+            for m_id, m_data in d.metadata["manufacturer_data"].items():
+                if m_id == 0xEC88:  # Govee のメーカーID
+                    temp, hum = decode_govee(m_data)
+                    if temp is not None:
+                        print(f"{d.address} 温度: {temp} ℃, 湿度: {hum} %")
+
+asyncio.run(main())
