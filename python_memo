@@ -109,3 +109,25 @@ async def main():
     print("スキャン終了")
 
 asyncio.run(main())
+
+
+
+最小コードで確認
+import asyncio
+from bleak import BleakScanner
+
+# 広告パケットを受信したときに呼ばれるコールバック
+def detection_callback(device, advertisement_data):
+    if advertisement_data.manufacturer_data:
+        print(f"検出: {device.address}")
+        print(f"manufacturer_data: {advertisement_data.manufacturer_data}\n")
+
+async def main():
+    scanner = BleakScanner(detection_callback)
+    await scanner.start()
+    print("スキャン中… 60秒待機")
+    await asyncio.sleep(60.0)  # 60秒間スキャン
+    await scanner.stop()
+    print("スキャン終了")
+
+asyncio.run(main())
