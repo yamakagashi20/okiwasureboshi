@@ -33,3 +33,16 @@ async def run():
     await scanner.stop()
 
 asyncio.run(run())
+
+
+
+
+from bleak import BleakScanner
+import asyncio
+
+async def main():
+    devices = await BleakScanner.discover(timeout=10.0)  # 10秒間スキャン
+    for d in devices:
+        print(d)
+
+asyncio.run(main())
