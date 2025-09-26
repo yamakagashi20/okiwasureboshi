@@ -1,12 +1,11 @@
 import asyncio
 from bleak import BleakClient
 
-ADDRESS = "XX:XX:XX:XX:XX:XX"  # H5110 の MAC アドレス
-UUID = "02f00000-0000-0000-0000-00000000ff02"  # 温湿度キャラクタリスティック
+ADDRESS = "XX:XX:XX:XX:XX:XX"
+UUID_NOTIFY = "02f00000-0000-0000-0000-00000000ff02"
+UUID_WRITE = "02f00000-0000-0000-0000-00000000ff01"  # 通知開始用
 
-# 通知コールバック
 def handle_notification(sender, data):
-    # data は bytes 型
     temp_raw = int.from_bytes(data[0:2], byteorder='little', signed=True)
     humi_raw = int.from_bytes(data[2:4], byteorder='little', signed=True)
     temperature = temp_raw / 100
@@ -15,14 +14,14 @@ def handle_notification(sender, data):
 
 async def main():
     async with BleakClient(ADDRESS) as client:
-        # 通知開始
-        await client.start_notify(UUID, handle_notification)
+        # 書き込みで通知開始
+        await client.write_gatt_char(UUID_WRITE, bytearray([0x01]))
+        await client.start_notify(UUID_NOTIFY, handle_notification)
         print("Receiving data... Ctrl+C to stop")
         while True:
-            await asyncio.sleep(1)  # 1秒ごとに通知を受ける
+            await asyncio.sleep(1)
 
 try:
     asyncio.run(main())
 except KeyboardInterrupt:
     print("Stopped")
-
