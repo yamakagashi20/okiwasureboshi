@@ -1,14 +1,5 @@
-from bleak import BleakClient
-import asyncio
-
-ADDRESS = "A4:C1:38:xx:xx:xx"  # H5110のMACアドレス
-
-async def main():
-    async with BleakClient(ADDRESS) as client:
-        services = await client.get_services()
-        for service in services:
-            print(f"[Service] {service}")
-            for char in service.characteristics:
-                print(f"  [Characteristic] {char}")
-
-asyncio.run(main())
+services = await client.get_services()
+for service in services:
+    print(f"[Service] {service.uuid}")
+    for char in service.characteristics:
+        print(f"  [Characteristic] {char.uuid}, properties: {char.properties}")
