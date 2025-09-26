@@ -1,13 +1,31 @@
 import asyncio
 from bleak import BleakScanner
 
+def parse_h5110(manufacturer_data: dict):
+    """
+    Govee H5110 の manufacturer_data をパースして温度・湿度を返す
+    """
+    for _, data in manufacturer_data.items():
+        if len(data) >= 6:
+            # データの 2〜5 バイト目に温湿度が入っている（仕様 reverse-engineering 情報より）
+            temp_raw = int.from_bytes(data[2:4], byteorder="little", signed=True)
+            hum_raw = int.from_bytes(data[4:6], byteorder="little")
+
+            temperature = temp_raw / 100
+            humidity = hum_raw / 100
+            return temperature, humidity
+    return None, None
+
 async def main():
     def detection_callback(device, advertisement_data):
-        print(f"Detected: {device.address}, RSSI={device.rssi}, name={device.name}")
+        if advertisement_data.manufacturer_data:
+            temp, hum = parse_h5110(advertisement_data.manufacturer_data)
+            if temp is not None:
+                print(f"{device.address} | Temp: {temp:.2f} °C | Hum: {hum:.2f} %")
 
     scanner = BleakScanner(detection_callback=detection_callback)
     await scanner.start()
-    await asyncio.sleep(5.0)
+    await asyncio.sleep(10.0)  # 10秒間スキャン
     await scanner.stop()
 
 asyncio.run(main())
