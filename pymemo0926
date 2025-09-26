@@ -1,5 +1,16 @@
-services = await client.get_services()
-for service in services:
-    print(f"[Service] {service.uuid}")
-    for char in service.characteristics:
-        print(f"  [Characteristic] {char.uuid}, properties: {char.properties}")
+import asyncio
+from bleak import BleakClient
+
+ADDRESS = "XX:XX:XX:XX:XX:XX"  # H5110 の MAC アドレス
+
+# ① async 関数を定義
+async def main():
+    async with BleakClient(ADDRESS) as client:
+        services = await client.get_services()  # ← await は async 内で使う
+        for service in services:
+            print(f"[Service] {service.uuid}")
+            for char in service.characteristics:
+                print(f"  [Characteristic] {char.uuid}, properties: {char.properties}")
+
+# ② asyncio.run() で関数を実行
+asyncio.run(main())
