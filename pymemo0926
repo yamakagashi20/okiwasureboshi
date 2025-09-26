@@ -34,6 +34,12 @@ asyncio.run(main())
 Device: F2:B2:03:86:69:61
 manufacturer_data: {1: b'\x01\x01\x040 d', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
 
+Device: F2:B2:03:86:69:61
+manufacturer_data: {1: b'\x01\x01\x04Gdd', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
+
+Device: F2:B2:03:86:69:61
+manufacturer_data: {1: b'\x01\x01\x03`sd', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
+
 
 
 
