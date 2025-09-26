@@ -192,3 +192,81 @@ async def main(scan_duration=60.0):
 if __name__ == "__main__":
     asyncio.run(main(scan_duration=60.0))  # 60秒間スキャン
 
+
+CSV保存
+
+
+import asyncio
+import csv
+from datetime import datetime
+from bleak import BleakScanner
+
+# --- 設定 ---
+TARGET_MAC = "F2:B2:03:86:69:61"
+SCAN_DURATION = 10 * 60  # 10分間（600秒）
+CSV_FILENAME = "h5110_log.csv"
+
+# --- 温度換算係数 ---
+TEMP_A = 0.016
+TEMP_B = 7.85
+
+# --- 湿度換算係数 ---
+HUM_A = 0.04425
+HUM_B = 49.58
+
+def raw_to_temp(raw):
+    return TEMP_A * raw + TEMP_B
+
+def raw_to_humi(raw):
+    val = HUM_A * raw + HUM_B
+    return max(0.0, min(100.0, val))
+
+def parse_manufacturer_bytes(data: bytes):
+    if len(data) >= 5:
+        temp_raw = int.from_bytes(data[2:4], byteorder="big", signed=False)
+        hum_raw = data[4]
+        temp_c = raw_to_temp(temp_raw)
+        hum_pct = raw_to_humi(hum_raw)
+        return temp_raw, temp_c, hum_raw, hum_pct
+    return None
+
+async def main():
+    # CSVファイル初期化
+    with open(CSV_FILENAME, mode='w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["timestamp", "mac", "temp_c", "humidity_pct", "raw_hex"])
+
+    def detection_callback(device, advertisement_data):
+        if device.address.upper() != TARGET_MAC.upper():
+            return
+
+        md = advertisement_data.manufacturer_data
+        if not md:
+            return
+
+        for company_id, data in md.items():
+            # company_id = 1 のみ解析
+            if company_id != 1:
+                continue
+
+            parsed = parse_manufacturer_bytes(data)
+            if parsed:
+                temp_raw, temp_c, hum_raw, hum_pct = parsed
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"{timestamp} | {device.address} | Temp: {temp_c:.2f} °C | Humidity: {hum_pct:.2f}% | raw_hex: {data.hex()}")
+                # CSVに追記
+                with open(CSV_FILENAME, mode='a', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow([timestamp, device.address, f"{temp_c:.2f}", f"{hum_pct:.2f}", data.hex()])
+            else:
+                print(f"{device.address} | raw data too short: {data.hex()}")
+
+    scanner = BleakScanner(detection_callback=detection_callback)
+    print(f"Scanning for {TARGET_MAC} for {SCAN_DURATION} seconds...")
+    await scanner.start()
+    await asyncio.sleep(SCAN_DURATION)
+    await scanner.stop()
+    print(f"Scan finished. Data saved to {CSV_FILENAME}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
