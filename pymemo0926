@@ -118,3 +118,7 @@ async def main(duration=30.0):
 if __name__ == "__main__":
     asyncio.run(main(30.0))  # 30秒スキャン
 
+
+Device: F2:B2:03:86:69:61
+manufacturer_data: {1: b'\x01\x01\x03\xb3\x91d', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
+
