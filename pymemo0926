@@ -59,3 +59,62 @@ async def main():
 
 asyncio.run(main())
 
+
+
+
+import asyncio
+from bleak import BleakScanner
+
+# --- MACアドレスを指定 ---
+TARGET_MAC = "F2:B2:03:86:69:61"
+
+# 温度・湿度変換係数
+TEMP_A = 0.0481
+TEMP_B = -26.6
+HUM_A = 0.56024
+HUM_B = 33.1723
+
+def raw_to_temp(raw):
+    return TEMP_A * raw + TEMP_B
+
+def raw_to_humi(raw):
+    val = HUM_A * raw + HUM_B
+    if val < 0:
+        return 0.0
+    if val > 100:
+        return 100.0
+    return val
+
+def parse_manufacturer_bytes(data: bytes):
+    if len(data) >= 5:
+        temp_raw = int.from_bytes(data[2:4], byteorder="big", signed=False)
+        hum_raw = data[4]
+        temp_c = raw_to_temp(temp_raw)
+        hum_pct = raw_to_humi(hum_raw)
+        return temp_raw, temp_c, hum_raw, hum_pct
+    return None
+
+async def main(duration=30.0):
+    def detection_callback(device, advertisement_data):
+        if device.address.upper() != TARGET_MAC.upper():
+            return  # MACアドレスが違う場合は無視
+
+        md = advertisement_data.manufacturer_data
+        if not md:
+            return
+        for company_id, data in md.items():
+            parsed = parse_manufacturer_bytes(data)
+            if parsed:
+                temp_raw, temp_c, hum_raw, hum_pct = parsed
+                print(f"{device.address} | Temp: {temp_c:.2f} °C | Humidity: {hum_pct:.2f}% | raw_hex: {data.hex()}")
+            else:
+                print(f"{device.address} | raw data too short: {data.hex()}")
+
+    scanner = BleakScanner(detection_callback=detection_callback)
+    await scanner.start()
+    await asyncio.sleep(duration)
+    await scanner.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main(30.0))  # 30秒スキャン
+
