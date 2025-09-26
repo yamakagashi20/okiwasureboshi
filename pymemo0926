@@ -1,11 +1,28 @@
-[Service] 02f00000-0000-0000-0000-00000000fe00
-  [Characteristic] 02f00000-0000-0000-0000-00000000ff01, properties: ['write-without-response', 'write']
-  [Characteristic] 02f00000-0000-0000-0000-00000000ff02, properties: ['read', 'notify']
-  [Characteristic] 02f00000-0000-0000-0000-00000000ff03, properties: ['read']
-  [Characteristic] 02f00000-0000-0000-0000-00000000ff00, properties: ['read']
-[Service] 494e5445-4c4c-495f-524f-434b535f4857
-  [Characteristic] 494e5445-4c4c-495f-524f-434b535f2011, properties: ['read', 'write', 'notify']
-  [Characteristic] 494e5445-4c4c-495f-524f-434b535f2013, properties: ['read', 'notify']
-  [Characteristic] 494e5445-4c4c-495f-524f-434b535f2012, properties: ['read', 'write', 'notify']
-[Service] 00001801-0000-1000-8000-00805f9b34fb
-  [Characteristic] 00002a05-0000-1000-8000-00805f9b34fb, properties: ['read', 'indicate']
+import asyncio
+from bleak import BleakClient
+
+ADDRESS = "XX:XX:XX:XX:XX:XX"  # H5110 の MAC アドレス
+UUID = "02f00000-0000-0000-0000-00000000ff02"  # 温湿度キャラクタリスティック
+
+# 通知コールバック
+def handle_notification(sender, data):
+    # data は bytes 型
+    temp_raw = int.from_bytes(data[0:2], byteorder='little', signed=True)
+    humi_raw = int.from_bytes(data[2:4], byteorder='little', signed=True)
+    temperature = temp_raw / 100
+    humidity = humi_raw / 100
+    print(f"Temperature: {temperature} °C, Humidity: {humidity} %")
+
+async def main():
+    async with BleakClient(ADDRESS) as client:
+        # 通知開始
+        await client.start_notify(UUID, handle_notification)
+        print("Receiving data... Ctrl+C to stop")
+        while True:
+            await asyncio.sleep(1)  # 1秒ごとに通知を受ける
+
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("Stopped")
+
