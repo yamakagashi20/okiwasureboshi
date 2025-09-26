@@ -122,3 +122,73 @@ if __name__ == "__main__":
 Device: F2:B2:03:86:69:61
 manufacturer_data: {1: b'\x01\x01\x03\xb3\x91d', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
 
+
+import asyncio
+from bleak import BleakScanner
+
+# --- 対象センサーのMACアドレス ---
+TARGET_MAC = "F2:B2:03:86:69:61"
+
+# --- 温度換算係数 ---
+TEMP_A = 0.016
+TEMP_B = 7.85
+
+# --- 湿度換算係数 ---
+HUM_A = 0.04425
+HUM_B = 49.58
+
+def raw_to_temp(raw):
+    """raw から摂氏温度に変換"""
+    return TEMP_A * raw + TEMP_B
+
+def raw_to_humi(raw):
+    """raw から湿度％に変換"""
+    val = HUM_A * raw + HUM_B
+    # 0〜100%にクリップ
+    return max(0.0, min(100.0, val))
+
+def parse_manufacturer_bytes(data: bytes):
+    """manufacturer_data の生データから温湿度を取得"""
+    if len(data) >= 5:
+        # バイト3-4が温度 raw (big-endian)
+        temp_raw = int.from_bytes(data[2:4], byteorder="big", signed=False)
+        # バイト5が湿度 raw
+        hum_raw = data[4]
+        temp_c = raw_to_temp(temp_raw)
+        hum_pct = raw_to_humi(hum_raw)
+        return temp_raw, temp_c, hum_raw, hum_pct
+    return None
+
+async def main(scan_duration=60.0):
+    def detection_callback(device, advertisement_data):
+        # MACアドレスが一致しない場合は無視
+        if device.address.upper() != TARGET_MAC.upper():
+            return
+
+        md = advertisement_data.manufacturer_data
+        if not md:
+            return
+
+        for company_id, data in md.items():
+            # company_id = 1 のみ温湿度解析
+            if company_id != 1:
+                continue
+
+            parsed = parse_manufacturer_bytes(data)
+            if parsed:
+                temp_raw, temp_c, hum_raw, hum_pct = parsed
+                print(f"{device.address} | Temp: {temp_c:.2f} °C | Humidity: {hum_pct:.2f}% | raw_hex: {data.hex()}")
+            else:
+                print(f"{device.address} | raw data too short: {data.hex()}")
+
+    # スキャナーを作成しコールバックを設定
+    scanner = BleakScanner(detection_callback=detection_callback)
+    print(f"Scanning for {TARGET_MAC} for {scan_duration} seconds...")
+    await scanner.start()
+    await asyncio.sleep(scan_duration)
+    await scanner.stop()
+    print("Scan finished.")
+
+if __name__ == "__main__":
+    asyncio.run(main(scan_duration=60.0))  # 60秒間スキャン
+
