@@ -1,10 +1,9 @@
 import asyncio
 from bleak import BleakScanner
-import struct
 
 # --- ★★★ 設定項目 ★★★ ---
 # ここに監視したいセンサーのBLEアドレスを設定してください
-TARGET_ADDRESS = "F2:B2:03:86:69:61" 
+TARGET_ADDRESS = "F2:B2:03:86:69:61"
 # --------------------------
 
 # データが更新されたかを確認するための変数
@@ -14,68 +13,65 @@ last_known_humidity = None
 def decode_govee_data(data: bytes):
     """
     Goveeのmanufacturer_dataを解析して温度と湿度を返す関数
-    多くのGovee温湿度計で使われている形式を元にしています。
-    データ形式: 3バイトの数値 (例: 0x0186a0)
-      - 上位1バイトと下位1バイトの一部が温度
-      - 下位2バイトの一部が湿度
-      - 最上位ビットは正負符号
     """
     try:
-        # 3バイトのデータを符号なし整数として解釈
         packed_data = int.from_bytes(data, 'big')
-
-        # 正負の符号を確認 (最上位ビットが1ならマイナス)
         is_positive = (packed_data & 0x800000) == 0
         
         if is_positive:
-            # 正の温度の場合
             temp_c = (packed_data & 0x7FFFFF) / 10000.0
             humidity = (packed_data % 10000) / 100.0
         else:
-            # 負の温度の場合 (符号ビットを反転させて計算)
             temp_c = -((packed_data ^ 0x800000) & 0x7FFFFF) / 10000.0
             humidity = (packed_data % 10000) / 100.0
 
-        # 値が妥当な範囲かチェック (ありえない値を除外)
         if -50 < temp_c < 150 and 0 <= humidity <= 100:
             return temp_c, humidity
         else:
             return None, None
-
     except Exception:
         return None, None
 
+def detection_callback(device, advertisement_data):
+    """
+    BLEデバイスが検出されるたびに呼び出される関数
+    """
+    global last_known_temp, last_known_humidity
+
+    # デバイスのアドレスがターゲットと一致するか確認
+    if device.address.upper() == TARGET_ADDRESS.upper():
+        if advertisement_data.manufacturer_data:
+            for company_id, data in advertisement_data.manufacturer_data.items():
+                if len(data) >= 3:
+                    # 最後の3バイトに温湿度データが含まれていると仮定して解析
+                    temp, humidity = decode_govee_data(data[-3:])
+                    
+                    if temp is not None:
+                        # データが前回と同じでなければ表示する
+                        if temp != last_known_temp or humidity != last_known_humidity:
+                            print(f"✅ {device.address} -> 温度: {temp:.2f}°C, 湿度: {humidity:.2f}%")
+                            last_known_temp = temp
+                            last_known_humidity = humidity
+                        break
 
 async def main():
-    global last_known_temp, last_known_humidity
     print(f"指定されたセンサーをスキャンしています: {TARGET_ADDRESS}")
     print("-------------------------------------------------")
-    print("新しいデータが検出されると、以下に表示されます...")
+    print("新しいデータが検出されると、以下に表示されます...(停止するには Ctrl+C)")
 
-    async with BleakScanner() as scanner:
-        async for device, advertisement_data in scanner.advertisement_datas():
-            # デバイスのアドレスがターゲットと一致するか確認
-            if device.address.upper() == TARGET_ADDRESS.upper():
-                
-                # Goveeのデータは通常、manufacturer_dataに含まれる
-                if advertisement_data.manufacturer_data:
-                    # Goveeのデータキーは複数あるため、全て試す
-                    for company_id, data in advertisement_data.manufacturer_data.items():
-                        
-                        # データ長が3バイト以上の場合に解析を試みる
-                        if len(data) >= 3:
-                            # 多くのGoveeセンサーは最後の3バイトに温湿度データを含める
-                            # ユーザー提供のデータ形式も考慮し、複数のパターンで試す
-                            temp, humidity = decode_govee_data(data[-3:])
-                            
-                            if temp is not None:
-                                # データが前回と同じでなければ表示する
-                                if temp != last_known_temp or humidity != last_known_humidity:
-                                    print(f"✅ {device.address} -> 温度: {temp:.2f}°C, 湿度: {humidity:.2f}%")
-                                    last_known_temp = temp
-                                    last_known_humidity = humidity
-                                break # 正しいデータが見つかったらループを抜ける
-
+    # スキャナーを作成し、検出コールバック関数を登録
+    scanner = BleakScanner(detection_callback=detection_callback)
+    
+    # スキャンを開始
+    await scanner.start()
+    
+    # プログラムがすぐに終了しないように、長時間待機する
+    # この間、バックグラウンドでスキャンとコールバックの呼び出しが続く
+    try:
+        await asyncio.sleep(3600)  # 1時間スキャンを継続
+    finally:
+        # スキャンを停止
+        await scanner.stop()
 
 if __name__ == "__main__":
     try:
