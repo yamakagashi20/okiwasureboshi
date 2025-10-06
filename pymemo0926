@@ -43,7 +43,96 @@ asyncio.run(scan())
 検出: F2:B2:03:86:69:61
 manufacturer_data: {1: b'\x01\x01\x04D\x15d', 76: b'\x02\x15INTELLI_ROCKS_HWPu\xf2\xff\x0c'}
 
+------------------------------------------
+#!/usr/bin/env python3
+# h5151_check_fixed.py
+# 実行前: pip3 install bleak
+# 実行例: sudo python3 h5151_check_fixed.py
 
+import asyncio
+from bleak import BleakScanner
+
+# 対象デバイスのMACアドレスを指定（大文字小文字はどちらでも可）
+TARGET_MAC = "F2:B2:03:86:69:61"
+
+def decode_govee_manufacturer(manufacturer_data: dict):
+    """
+    柔軟にデコードを試みる。
+    - humidity: 常に最後の2バイトを結合して /100
+    - temperature:
+      1) 単一バイト形式を探索 (byte - 43 が妥当範囲なら採用)
+      2) フォールバックで 2バイト結合を /100 として試す
+    """
+    if not manufacturer_data:
+        return None, None
+
+    # まず最初の manufacturer_data 要素を取り出す
+    first_key = next(iter(manufacturer_data))
+    raw = bytes(manufacturer_data[first_key])
+    rb = list(raw)
+
+    # デバッグ出力用に生データを保持
+    # print("raw bytes:", rb)
+
+    # ----- humidity: 最後の2バイトを使う（多くの機種でこのパターン）
+    hum = None
+    if len(rb) >= 2:
+        hum_raw = (rb[-2] << 8) | rb[-1]
+        hum = hum_raw / 100.0
+
+    # ----- temperature: 単一バイト（オフセット）を探索
+    temp = None
+    for i in range(0, max(0, len(rb) - 2)):  # 最後の2バイトは湿度に使うため除外
+        candidate = rb[i] - 43  # 今回のケースで有効と分かっているオフセット
+        if -40.0 <= candidate <= 85.0:
+            temp = float(candidate)
+            # 見つかったらループを抜ける
+            break
+
+    # ----- フォールバック: 2バイト結合 -> /100
+    if temp is None and len(rb) >= 4:
+        # 例: [ ..., T_hi, T_lo, H_hi, H_lo ]
+        t_hi = rb[-4]
+        t_lo = rb[-3]
+        temp_raw = (t_hi << 8) | t_lo
+        temp2 = temp_raw / 100.0
+        if -40.0 <= temp2 <= 85.0:
+            temp = float(temp2)
+
+    return temp, hum
+
+async def scan_loop():
+    print("スキャン中… (Ctrl+Cで停止)")
+    while True:
+        devices = await BleakScanner.discover(timeout=4.0)
+        found = False
+        for d in devices:
+            if d.address.upper() == TARGET_MAC.upper():
+                found = True
+                print(f"\n対象デバイス発見: {d.name}  ({d.address})  RSSI={d.rssi}dBm")
+                mfg = d.metadata.get("manufacturer_data", {})
+                # デバッグ: 生データ表示
+                print("manufacturer_data (raw):", {k: bytes(v) for k,v in mfg.items()})
+                temp, hum = decode_govee_manufacturer(mfg)
+                if temp is not None and hum is not None:
+                    print(f"温度: {temp:.2f} °C    湿度: {hum:.2f} %")
+                elif temp is not None:
+                    print(f"温度: {temp:.2f} °C    湿度: 取得不可")
+                elif hum is not None:
+                    print(f"温度: 取得不可    湿度: {hum:.2f} %")
+                else:
+                    print("温湿度デコードに失敗しました（フォーマットが未対応）")
+        if not found:
+            print(".", end="", flush=True)
+        await asyncio.sleep(1.0)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(scan_loop())
+    except KeyboardInterrupt:
+        print("\n終了")
+
+------------------------------------------------------
 
 
 
