@@ -1,42 +1,87 @@
 import asyncio
 from bleak import BleakScanner
+import struct
 
-# 取得対象のH5151のMACアドレス（あなたの環境に合わせて変更）
-TARGET_MAC = "F2:B2:03:86:69:61"
+# --- ★★★ 設定項目 ★★★ ---
+# ここに監視したいセンサーのBLEアドレスを設定してください
+TARGET_ADDRESS = "F2:B2:03:86:69:61" 
+# --------------------------
 
-def decode_govee_data(manufacturer_data: dict):
-    """GoveeのManufacturerデータから温度・湿度を抽出する"""
-    if 1 not in manufacturer_data:
+# データが更新されたかを確認するための変数
+last_known_temp = None
+last_known_humidity = None
+
+def decode_govee_data(data: bytes):
+    """
+    Goveeのmanufacturer_dataを解析して温度と湿度を返す関数
+    多くのGovee温湿度計で使われている形式を元にしています。
+    データ形式: 3バイトの数値 (例: 0x0186a0)
+      - 上位1バイトと下位1バイトの一部が温度
+      - 下位2バイトの一部が湿度
+      - 最上位ビットは正負符号
+    """
+    try:
+        # 3バイトのデータを符号なし整数として解釈
+        packed_data = int.from_bytes(data, 'big')
+
+        # 正負の符号を確認 (最上位ビットが1ならマイナス)
+        is_positive = (packed_data & 0x800000) == 0
+        
+        if is_positive:
+            # 正の温度の場合
+            temp_c = (packed_data & 0x7FFFFF) / 10000.0
+            humidity = (packed_data % 10000) / 100.0
+        else:
+            # 負の温度の場合 (符号ビットを反転させて計算)
+            temp_c = -((packed_data ^ 0x800000) & 0x7FFFFF) / 10000.0
+            humidity = (packed_data % 10000) / 100.0
+
+        # 値が妥当な範囲かチェック (ありえない値を除外)
+        if -50 < temp_c < 150 and 0 <= humidity <= 100:
+            return temp_c, humidity
+        else:
+            return None, None
+
+    except Exception:
         return None, None
 
-    raw = manufacturer_data[1]
-    if len(raw) < 5:
-        return None, None
 
-    # データ形式は Govee BLE広告仕様（温度・湿度が2バイトごとに格納）
-    temp_raw = (raw[1] << 8) | raw[2]
-    hum_raw = (raw[3] << 8) | raw[4]
+async def main():
+    global last_known_temp, last_known_humidity
+    print(f"指定されたセンサーをスキャンしています: {TARGET_ADDRESS}")
+    print("-------------------------------------------------")
+    print("新しいデータが検出されると、以下に表示されます...")
 
-    # 温度は10倍、湿度は100倍されているケースが多い
-    temperature = temp_raw / 100.0
-    humidity = hum_raw / 100.0
+    async with BleakScanner() as scanner:
+        async for device, advertisement_data in scanner.advertisement_datas():
+            # デバイスのアドレスがターゲットと一致するか確認
+            if device.address.upper() == TARGET_ADDRESS.upper():
+                
+                # Goveeのデータは通常、manufacturer_dataに含まれる
+                if advertisement_data.manufacturer_data:
+                    # Goveeのデータキーは複数あるため、全て試す
+                    for company_id, data in advertisement_data.manufacturer_data.items():
+                        
+                        # データ長が3バイト以上の場合に解析を試みる
+                        if len(data) >= 3:
+                            # 多くのGoveeセンサーは最後の3バイトに温湿度データを含める
+                            # ユーザー提供のデータ形式も考慮し、複数のパターンで試す
+                            temp, humidity = decode_govee_data(data[-3:])
+                            
+                            if temp is not None:
+                                # データが前回と同じでなければ表示する
+                                if temp != last_known_temp or humidity != last_known_humidity:
+                                    print(f"✅ {device.address} -> 温度: {temp:.2f}°C, 湿度: {humidity:.2f}%")
+                                    last_known_temp = temp
+                                    last_known_humidity = humidity
+                                break # 正しいデータが見つかったらループを抜ける
 
-    return temperature, humidity
 
-async def scan():
-    print("H5151をスキャン中… Ctrl+Cで停止")
-    while True:
-        devices = await BleakScanner.discover(timeout=5.0)
-        for d in devices:
-            if d.address.upper() == TARGET_MAC.upper():
-                print(f"\n対象デバイス発見: {d.name} ({d.address})")
-                temp, hum = decode_govee_data(d.metadata.get("manufacturer_data", {}))
-                if temp is not None:
-                    print(f"温度: {temp:.2f} °C, 湿度: {hum:.2f} %")
-                else:
-                    print("温湿度データを取得できませんでした")
-
-asyncio.run(scan())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nスキャンを停止しました。")
 --------------------------
 
 
